@@ -8,6 +8,13 @@ import os
 from collections import OrderedDict
 from timeit import default_timer as timer
 from KittiDataset import KittiDataset
+from options.train_options import TrainOptions
 
-dataset = KittiDataset("train.txt", "", [128, 416], 3)
-dataloader = DataLoader(dataset, batch_size="", shuffle=True, num_workers="", pin_memory=True)
+opt = TrainOptions().parse()
+imgSize = [opt.imH, opt.imW]
+
+dataset = KittiDataset("train.txt", opt.dataroot, imgSize, 3)
+dataloader = DataLoader(dataset, batch_size=opt.batchSize, shuffle=True, num_workers=opt.nThreads, pin_memory=True)
+
+gpu_ids = list(range(opt.batchSize))
+
