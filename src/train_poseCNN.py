@@ -22,7 +22,6 @@ img_size = [opt.imH, opt.imW]
 visualizer = Visualizer(opt)
 
 dataset = KITTIdataset(data_root_path=opt.dataroot, img_size=img_size, bundle_size=3)
-# dataset = KCSdataset(img_size=img_size, bundle_size=3)
 dataloader = DataLoader(dataset, batch_size=opt.batchSize,
                         shuffle=True, num_workers=opt.nThreads, pin_memory=True)
 
@@ -59,19 +58,9 @@ for epoch in range(max(0, opt.which_epoch), opt.epoch_num+1):
         optimizer.zero_grad()
         frames = Variable(data[0].float().cuda())
         camparams = Variable(data[1])
-        cost, photometric_cost, smoothness_cost, frames, inv_depths, _ = \
-            sfmlearner.forward(frames, camparams)
-        # print(frames.size())
-        # print(inv_depths.size())
+        cost, photometric_cost, smoothness_cost, frames, inv_depths, _ = sfmlearner.forward(frames, camparams)
         cost_ = cost.data.cpu()
         inv_depths_mean = inv_depths.mean().data.cpu().numpy()
-        # if np.isnan(cost_.numpy()) or np.isinf(cost_.numpy()) or inv_depths_mean<1 or inv_depths_mean>7:
-        #     # lkvolearner.save_model(os.path.join(opt.checkpoints_dir, '%s_model.pth' % (epoch)))
-        #     print("detect nan or inf-----!!!!! %f" %(inv_depths_mean))
-        #     continue
-
-        # print(cost)
-        # print(inv_depth_pyramid)
         cost.backward()
         optimizer.step()
 
@@ -102,4 +91,3 @@ for epoch in range(max(0, opt.which_epoch), opt.epoch_num+1):
             print("cache model....")
             sfmlearner.save_model(os.path.join(opt.checkpoints_dir, '%s' % (epoch)))
             sfmlearner.cuda()
-            print('..... saved')
