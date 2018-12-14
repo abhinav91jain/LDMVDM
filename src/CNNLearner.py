@@ -11,6 +11,7 @@ import itertools
 class FlipLR(nn.Module):
     def __init__(self, imW, dim_w):
         super(FlipLR, self).__init__()
+        inv_indices = torch.arange(imW-1, -1, -1).long()
         self.register_buffer('inv_indices', torch.arange(imW-1, -1, -1).long())
         self.dim_w = dim_w
 
