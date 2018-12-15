@@ -13,13 +13,10 @@ from KITTIdataset import KITTIdataset
 
 from collections import OrderedDict
 from options.train_options import TrainOptions
-from util.visualizer import Visualizer
 
 
 opt = TrainOptions().parse()
 img_size = [opt.imH, opt.imW]
-
-visualizer = Visualizer(opt)
 
 dataset = KITTIdataset(data_root_path=opt.dataroot, img_size=img_size, bundle_size=3)
 dataloader = DataLoader(dataset, batch_size=opt.batchSize,shuffle=True, num_workers=opt.nThreads, pin_memory=True)
@@ -64,16 +61,9 @@ for epoch in range(max(0, opt.which_epoch), opt.epoch_num+1):
 
         step_num+=1
 
-        if np.mod(step_num, opt.print_freq)==0:
-            print('%s: %s / %s' % (epoch, step_num, int(len(dataset)/opt.batchSize)))
-            print(inv_depths_mean)
-            visualizer.plot_current_errors(step_num, 1, opt,OrderedDict([('photometric_cost', photometric_cost.data.cpu()[0]),('smoothness_cost', smoothness_cost.data.cpu()[0]),
-                         ('cost', cost.data.cpu()[0])]))
-
         if np.mod(step_num, opt.display_freq)==0:
             frame_vis = frames.data.permute(1,2,0).contiguous().cpu().numpy().astype(np.uint8)
             depth_vis = vis_depthmap(inv_depths.data.cpu()).numpy().astype(np.uint8)
-            visualizer.display_current_results(OrderedDict([('%s frame' % (opt.name), frame_vis), ('%s inv_depth' % (opt.name), depth_vis)]),epoch)
             sio.savemat(os.path.join(opt.checkpoints_dir, 'depth_%s.mat' % (step_num)),{'D': inv_depths.data.cpu().numpy(),'I': frame_vis})
 
         if np.mod(step_num, opt.save_latest_freq)==0:
