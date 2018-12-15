@@ -62,9 +62,7 @@ for epoch in range(max(0, opt.which_epoch), opt.epoch_num+1):
         if np.mod(step_num, opt.display_freq)==0:
             frame_vis = frames.data.permute(1,2,0).contiguous().cpu().numpy().astype(np.uint8)
             depth_vis = vis_depthmap(inv_depths.data.cpu()).numpy().astype(np.uint8)
-            sio.savemat(os.path.join(opt.checkpoints_dir, 'depth_' + str(step_num) + '.mat',
-                {'D': inv_depths.data.cpu().numpy(),
-                 'I': frame_vis})
+            sio.savemat(os.path.join(opt.checkpoints_dir, 'depth_' + str(step_num) + '.mat', {'D': inv_depths.data.cpu().numpy(), 'I': frame_vis})
 
         if np.mod(step_num, opt.save_latest_freq)==0:
             print("cache model....")
