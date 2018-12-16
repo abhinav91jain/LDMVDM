@@ -5,7 +5,7 @@ from PIL import Image
 import os
 
 class KittiDataset(Dataset):
-	def __init__(self,listFile,dataPath,imgSize,bundleSize):
+	def __init__(self,dataPath,imgSize,bundleSize,listFile='train.txt'):
 		self.dataPath = dataPath
 		self.imgSize = imgSize
 		self.bundleSize = bundleSize
@@ -24,19 +24,17 @@ class KittiDataset(Dataset):
 	def __getitem__(self,item):
 		camFile = os.path.join(self.dataPath, self.framePathes[item] + "_cam.txt")
 		with open(camFile) as file:
-            camIntrinsics = [float(x) for x in next(file).split(',')]
+			camIntrinsics = [float(x) for x in next(file).split(',')]
+		
+		camParams = np.asarray(camIntrinsics)
 
-        camParams = np.asarray(camIntrinsics)
+		imgFile = os.path.join(self.dataPath, self.framePathes[item] + ".jpg")
+		framesCat = np.asarray(Image.open(imgFile))
+		frameList = []
+		for i in range(self.bundleSize):
+			frameList.append(framesCat[:,i*self.imgSize[1]:(i+1)*self.imgSize[1],:])
 
-        imgFile = os.path.join(self.dataPath, self.framePathes[item] + ".jpg")
-        framesCat = np.asarray(Image.open(imgFile))
-
-        frameList = []
-        for i in range(self.bundleSize):
-        	frameList.append(framesCat[:,i*self.imgSize[1]:(i+1)*self.imgSize[1],:])
-
-        frames = np.asarray(frameList).astype(float).transpose(0,3,1,2)
-        
+		frames = np.asarray(frameList).astype(float).transpose(0,3,1,2)
 		return frames, camParams
 
 if __name__ == "__main__":

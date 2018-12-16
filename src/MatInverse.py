@@ -50,9 +50,8 @@ def inv_batch(input):
     return InverseBatch()(input)
 
 if __name__ == "__main__":
-
-	initial = torch.rand(2,2)
-	invH = inv(Variable(initial, requires_grad=True))
-	invHMean = invH.mean()
+    initial = torch.rand(2,2)
+    invH = inv(Variable(initial, requires_grad=True))
+    invHMean = invH.mean()
     invHMean.backward()
     test = gradcheck(inv, (Variable(W, requires_grad=True),), eps=1e-5, atol=1e-4)

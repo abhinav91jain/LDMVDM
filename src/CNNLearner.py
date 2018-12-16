@@ -1,4 +1,4 @@
-from DirectVisualOdometry import DVO
+from DirectVisualOdometry import DirectVO
 from networks import VggDepthEstimator, PoseNet, PoseExpNet
 from ImgPyramid import ImagePyramidLayer
 import torch.nn as nn
@@ -57,13 +57,13 @@ class CNNKernel(nn.Module):
         super(CNNKernel, self).__init__()
         self.img_size = img_size
         self.fliplr_func = FlipLR(imW=img_size[1], dim_w=3)
-        self.vo = DVO(imH=img_size[0], imW=img_size[1], pyramid_layer_num=4)
+        self.vo = DirectVO(imH=img_size[0], imW=img_size[1], pyramid_layer_num=4)
         self.depth_net = VggDepthEstimator(img_size)
         if use_expl_mask:
             self.pose_net = PoseExpNet(3)
         else:
             self.pose_net = PoseNet(3)
-        self.pyramid_func = ImagePyramidLayer(chan=1, pyramid_layer_num=4)
+        self.pyramid_func = ImagePyramidLayer(flag=1, pyramid_layer_num=4)
         self.smooth_term = smooth_term
         self.use_expl_mask = use_expl_mask
 
@@ -121,6 +121,6 @@ class CNNKernel(nn.Module):
         smoothness_cost = self.vo.multi_scale_image_aware_smoothness_cost(inv_depth0_pyramid, frames_pyramid, levels=[2,3], type=self.smooth_term) \
                             + self.vo.multi_scale_image_aware_smoothness_cost(inv_depth_norm_pyramid, frames_pyramid, levels=[2,3], type=self.smooth_term)
 
-        cost = photometric_cost + lambda_S*smoothness_cost - lambda_E*expl_mask_reg_cost
+        cost = photometric_cost + l1*smoothness_cost - l2*expl_mask_reg_cost
         
         return cost, photometric_cost, smoothness_cost, ref_frame_pyramid[0], ref_inv_depth_pyramid[0]*inv_depth_mean_ten, expl_mask

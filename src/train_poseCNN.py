@@ -9,7 +9,7 @@ import scipy.io as sio
 import os
 
 from CNNLearner import CNNLearner
-from KITTIdataset import KITTIdataset
+from KittiDataset import KittiDataset
 
 from collections import OrderedDict
 from options.train_options import TrainOptions
@@ -18,19 +18,19 @@ from options.train_options import TrainOptions
 opt = TrainOptions().parse()
 img_size = [opt.imH, opt.imW]
 
-dataset = KITTIdataset(data_root_path=opt.dataroot, img_size=img_size, bundle_size=3)
+dataset = KittiDataset(dataPath=opt.dataroot, imgSize=img_size, bundleSize=3)
 dataloader = DataLoader(dataset, batch_size=opt.batchSize,shuffle=True, num_workers=opt.nThreads, pin_memory=True)
 
 gpu_ids = list(range(opt.batchSize))
 
 
-cnnlearner = CNNLearner(img_size=img_size, ref_frame_idx=1, lambda_S=opt.lambda_S, gpu_ids = gpu_ids, smooth_term = opt.smooth_term, use_ssim=opt.use_ssim)
+cnnlearner = CNNLearner(img_size=img_size, ref_frame_idx=1, l1=opt.lambda_S, gpu_ids = gpu_ids, smooth_term = opt.smooth_term, use_ssim=opt.use_ssim)
 cnnlearner.init_weights()
 
 
 if opt.which_epoch >= 0:
     print("load pretrained model")
-   cnnlearner.load_model(os.path.join(opt.checkpoints_dir, '%s' % (opt.which_epoch)))
+    cnnlearner.load_model(os.path.join(opt.checkpoints_dir, '%s' % (opt.which_epoch)))
 
 cnnlearner.cuda()
 

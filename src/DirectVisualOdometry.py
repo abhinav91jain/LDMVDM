@@ -1,21 +1,22 @@
 import torch
+import torch.nn as nn
 from torch import FloatTensor
 from torch.autograd import Variable
 from torch.nn.functional import grid_sample
 from torch.nn import ReplicationPad2d
+from torch.nn import AvgPool2d
 from ImgPyramid import ImagePyramidLayer
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from MatInverse import inc
+from torch import optim
+from MatInverse import inv
 
 CHANNEL = 3
 
 def sampling(A, x, y):
-	batch, k, h, w = A.size()
-	x1 = x/((w-1)/2) - 1
-	y1 = y/((h-1)/2) - 1
-	grid = torch.cat(x1.view(batch,h,w,1), y1.view(batch,h,w,1), 3)
-	Q = grid_sample(A, grid, mode='bilinear')
+    batch, k, h, w = A.size()
+    x1 = x/((w-1)/2) - 1
+    y1 = y/((h-1)/2) - 1
+    grid = torch.cat((x1.view(batch,h,w,1), y1.view(batch,h,w,1)), 3)
+    Q = grid_sample(A, grid, mode='bilinear')
     in_view_mask = Variable(((x1.data > -1+2/w) & (x1.data < 1-2/w) & (y1.data > -1+2/h) & (y1.data < 1-2/h)).type_as(A.data))
     return Q.view(batch, k, h*w), in_view_mask
 
@@ -85,11 +86,12 @@ class Twist2Mat(nn.Module):
         self.register_buffer('E', torch.eye(3))
 
     def cprodmat_batch(self, a_batch):
-    	o = Variable(self.o).expand(a_batch.size(), 1)
+        batch_size, _ = a_batch.size()
+        o = Variable(self.o).expand(batch_size, 1)
         a0 = a_batch[:, 0:1]
         a1 = a_batch[:, 1:2]
         a2 = a_batch[:, 2:3]
-        return torch.cat((o, -a2, a1, a2, o, -a0, -a1, a0, o), 1).view(a_batch.size(), 3, 3)
+        return torch.cat((o, -a2, a1, a2, o, -a0, -a1, a0, o), 1).view(batch_size, 3, 3)
 
 
     def forward(self, twist_batch):
@@ -101,87 +103,87 @@ class Twist2Mat(nn.Module):
             + A*rot_angle.sin().view(batch_size, 1, 1).expand(batch_size, 3, 3)\
             + A.bmm(A)*((1-rot_angle.cos()).view(batch_size, 1, 1).expand(batch_size, 3, 3))
 
-	def compute_img_stats(img):
-    	img_pad = img
-    	mu = AvgPool2d(kernel_size=3, stride=1, padding=0)(img_pad)
-    	sigma = AvgPool2d(kernel_size=3, stride=1, padding=0)(img_pad**2) - mu**2
-    	return mu, sigma
+def compute_img_stats(img):
+    img_pad = img
+    mu = AvgPool2d(kernel_size=3, stride=1, padding=0)(img_pad)
+    sigma = AvgPool2d(kernel_size=3, stride=1, padding=0)(img_pad**2) - mu**2
+    return mu, sigma
 
-	def compute_img_stats_pyramid(frames_pyramid):
-    	mu_pyramid = []
-    	sigma_pyramid = []
-    	for layer_idx in range(len(frames_pyramid)):
-        	mu, sigma = compute_img_stats(frames_pyramid[layer_idx])
-        	mu_pyramid.append(mu)
-        	sigma_pyramid.append(sigma)
-    	return mu_pyramid, sigma_pyramid
+def compute_img_stats_pyramid(frames_pyramid):
+    mu_pyramid = []
+    sigma_pyramid = []
+    for layer_idx in range(len(frames_pyramid)):
+        mu, sigma = compute_img_stats(frames_pyramid[layer_idx])
+        mu_pyramid.append(mu)
+        sigma_pyramid.append(sigma)
+    return mu_pyramid, sigma_pyramid
 
-    def compute_SSIM(img0, mu0, sigma0, img1, mu1, sigma1):
-    	img0_img1_pad = img0*img1
-    	sigma01 = AvgPool2d(kernel_size=3, stride=1, padding=0)(img0_img1_pad) - mu0*mu1
-    	ssim_n = (2*mu0*mu1 + .001) * (2*sigma01 + .009)
-    	ssim_d = (mu0**2 + mu1**2 + .001) * (sigma0 + sigma1 + .009)
-    	ssim = ssim_n / ssim_d
-    	return ((1-ssim)*.5).clamp(0, 1)
-
-
-	def compute_photometric_cost(img_diff, mask):
-    	k = img_diff.size(1)
-    	batch_size = img_diff.size(0)
-    	mask_ = (mask.view(batch_size, 1, -1) * (1/127.5)).expand_as(img_diff)
-    	cost = img_diff.abs() * mask_
-    	return cost
-
-	def compute_photometric_cost_norm(img_diff, mask):
-	    cost = img_diff.abs().sum(1) * mask
-	    num_in_view = mask.sum(1)
-	    cost_norm = cost.sum(1) / (num_in_view+1e-10)
-	    return cost_norm * (1 / 127.5), (num_in_view / mask.size(1)).min()
+def compute_SSIM(img0, mu0, sigma0, img1, mu1, sigma1):
+	img0_img1_pad = img0*img1
+	sigma01 = AvgPool2d(kernel_size=3, stride=1, padding=0)(img0_img1_pad) - mu0*mu1
+	ssim_n = (2*mu0*mu1 + .001) * (2*sigma01 + .009)
+	ssim_d = (mu0**2 + mu1**2 + .001) * (sigma0 + sigma1 + .009)
+	ssim = ssim_n / ssim_d
+	return ((1-ssim)*.5).clamp(0, 1)
 
 
-	def gradient(input, do_normalize=False):
-	    if input.dim() == 2:
-	        D_ry = input[1:, :]
-	        D_ly = input[:-1, :]
-	        D_rx = input[:, 1:]
-	        D_lx = input[:, :-1]
-	    elif input.dim() == 3:
-	        D_ry = input[:, 1:, :]
-	        D_ly = input[:, :-1, :]
-	        D_rx = input[:, :, 1:]
-	        D_lx = input[:, :, :-1]
-	    elif input.dim() == 4:
-	        D_ry = input[:, :, 1:, :]
-	        D_ly = input[:, :, :-1, :]
-	        D_rx = input[:, :, :, 1:]
-	        D_lx = input[:, :, :, :-1]
-		    Dx = D_rx - D_lx
-		    Dy = D_ry - D_ly
-		    if do_normalize:
-		        Dx = Dx / (D_rx + D_lx)
-		        Dy = Dy / (D_ry + D_ly)
-		    return Dx, Dy
+def compute_photometric_cost(img_diff, mask):
+	k = img_diff.size(1)
+	batch_size = img_diff.size(0)
+	mask_ = (mask.view(batch_size, 1, -1) * (1/127.5)).expand_as(img_diff)
+	cost = img_diff.abs() * mask_
+	return cost
+
+def compute_photometric_cost_norm(img_diff, mask):
+    cost = img_diff.abs().sum(1) * mask
+    num_in_view = mask.sum(1)
+    cost_norm = cost.sum(1) / (num_in_view+1e-10)
+    return cost_norm * (1 / 127.5), (num_in_view / mask.size(1)).min()
+
+def gradient(input, do_normalize=False):
+    if input.dim() == 2:
+        D_ry = input[1:, :]
+        D_ly = input[:-1, :]
+        D_rx = input[:, 1:]
+        D_lx = input[:, :-1]
+    elif input.dim() == 3:
+        D_ry = input[:, 1:, :]
+        D_ly = input[:, :-1, :]
+        D_rx = input[:, :, 1:]
+        D_lx = input[:, :, :-1]
+    elif input.dim() == 4:
+        D_ry = input[:, :, 1:, :]
+        D_ly = input[:, :, :-1, :]
+        D_rx = input[:, :, :, 1:]
+        D_lx = input[:, :, :, :-1]
+    Dx = D_rx - D_lx
+    Dy = D_ry - D_ly
+    if do_normalize:
+        Dx = Dx / (D_rx + D_lx)
+        Dy = Dy / (D_ry + D_ly)
+    return Dx, Dy
 
 class DirectVO(nn.Module):
-	def __init__(self, imH=128, imW=416, pyramid_layer_num=5, max_itr_num=20):
-		super(DirectVO, self).__init__()
-		self.max_itr_num = max_itr_num
-		self.imH = imH
-		self.imW = imW
-		self.pyramid_layer_num = pyramid_layer_num
-		self.twist2mat_batch_func = Twist2Mat()
-		self.img_gradient_func = GradientLayer()
-		self.pyramid_func = ImagePyramidLayer(chan=3, pyramid_layer_num=self.pyramid_layer_num)
-		self.laplacian_func = LaplacianLayer()
-		x_pyramid, y_pyramid = self.pyramid_func.get_coords(self.imH, self.imW)
-		for i in range(self.pyramid_layer_num):
-		    self.register_buffer('x_'+str(i), torch.from_numpy(x_pyramid[i]).float())
-		    self.register_buffer('y_'+str(i), torch.from_numpy(y_pyramid[i]).float())
-		self.register_buffer('o', torch.zeros(1,1))
-		self.register_buffer('E', torch.eye(3))
+    def __init__(self, imH=128, imW=416, pyramid_layer_num=5, max_itr_num=20):
+        super(DirectVO, self).__init__()
+        self.max_itr_num = max_itr_num
+        self.imH = imH
+        self.imW = imW
+        self.pyramid_layer_num = pyramid_layer_num
+        self.twist2mat_batch_func = Twist2Mat()
+        self.img_gradient_func = GradientLayer()
+        self.pyramid_func = ImagePyramidLayer(flag=3, pyramid_layer_num=self.pyramid_layer_num)
+        self.laplacian_func = LaplacianLayer()
+        x_pyramid, y_pyramid = self.pyramid_func.get_coords(self.imH, self.imW)
+        for i in range(self.pyramid_layer_num):
+            self.register_buffer('x_'+str(i), torch.from_numpy(x_pyramid[i]).float())
+            self.register_buffer('y_'+str(i), torch.from_numpy(y_pyramid[i]).float())
+        self.register_buffer('o', torch.zeros(1,1))
+        self.register_buffer('E', torch.eye(3))
 
-	def setCamera(self, cx, cy, fx, fy):
-	    self.camparams = dict(fx=fx, fy=fy, cx=cx, cy=cy)
+
+    def setCamera(self, cx, cy, fx, fy):
+        self.camparams = dict(fx=fx, fy=fy, cx=cx, cy=cy)
 
 
     def init(self, ref_frame_pyramid, inv_depth_pyramid):
@@ -237,7 +239,7 @@ class DirectVO(nn.Module):
                             Y.view(1, Y.numel())), 0)
             self.xy_pyramid.append(xy)
 
-            def compute_dIdp(self, imgrad_x, imgrad_y, inv_depth, xy):
+    def compute_dIdp(self, imgrad_x, imgrad_y, inv_depth, xy):
         k, h, w = imgrad_x.size()
         _, pt_num = xy.size()
         assert(h*w == pt_num)
@@ -268,7 +270,7 @@ class DirectVO(nn.Module):
     def warp_batch(self, img_batch, level_idx, R_batch, t_batch):
         return self.warp_batch_func(img_batch, self.inv_depth_pyramid[level_idx], level_idx, R_batch, t_batch)
 
-        def warp_batch_func(self, img_batch, inv_depth, level_idx, R_batch, t_batch):
+    def warp_batch_func(self, img_batch, inv_depth, level_idx, R_batch, t_batch):
         batch_size, k, h, w = img_batch.size()
         xy = self.xy_pyramid[level_idx]
         _, N = xy.size()
@@ -354,6 +356,7 @@ class DirectVO(nn.Module):
         depth_lap = self.laplacian_func(depth, do_normalize=False)
         x = (-img_lap.mean(1)).exp()*(depth_lap)
         return x.mean()
+
     def compute_image_aware_2nd_smoothness_cost(self, depth, img):
         img_lap = self.laplacian_func(img/255, do_normalize=False)
         depth_grad_x, depth_grad_y = gradient(depth, do_normalize=False)
@@ -416,7 +419,6 @@ class DirectVO(nn.Module):
 
         pixel_warp = []
         in_view_mask = []
-        cur_time = timer()
 
         for level_idx in range(self.pyramid_layer_num-1, -1, -1):
 
@@ -470,8 +472,6 @@ class DirectVO(nn.Module):
 
         pixel_warp = []
         in_view_mask = []
-
-        cur_time = timer()
 
         for level_idx in range(len(frames_pyramid)-1, -1, -1):
 

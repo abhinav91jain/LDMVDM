@@ -1,6 +1,5 @@
 import argparse
 import os
-from util import util
 import torch
 
 class BaseOptions():
@@ -26,6 +25,17 @@ class BaseOptions():
         self.parser.add_argument('--display_port', type=int, default=8097, help='visdom port of the web display')
         self.parser.add_argument('--display_single_pane_ncols', type=int, default=0, help='if positive, display all images in a single visdom web panel with certain number of images per row.')
 
+
+    def mkdir(self, path):
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+    def mkdirs(self, paths):
+        if isinstance(paths, list) and not isinstance(paths, str):
+            for path in paths:
+                self.mkdir(path)
+        else:
+            self.mkdir(paths)
 
 
     def parse(self):
@@ -54,7 +64,7 @@ class BaseOptions():
 
         # save to the disk
         expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
-        util.mkdirs(expr_dir)
+        self.mkdirs(expr_dir)
         file_name = os.path.join(expr_dir, 'opt.txt')
         with open(file_name, 'wt') as opt_file:
             opt_file.write('------------ Options -------------\n')
