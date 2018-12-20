@@ -2,7 +2,19 @@
 
 Implementation of the methods in "[Learning Depth from Monocular Videos using Direct Methods](http://openaccess.thecvf.com/content_cvpr_2018/papers/Wang_Learning_Depth_From_CVPR_2018_paper.pdf)".
 
-## Pre-requisite
+## Abstract
+In the recent years, depth prediction from the monocular video using unsupervised methods for training have gained advances in CNNs. The paper attempts to demonstrate empirically that incorporation of recent advances in Direct Visual Odometry(DVO) with an additional CNN pose prediction model to employ a differential and deteministic approach for pose prediction substantially improves performance.
+
+## Source Files
+- **ImgPyramid.py**: To compute larger motions in DVO we form pyramid of images through downsampling.
+- **Matinverse.py**: Compute inverse depth maps and camera poses as supervision to learn the depth estimator.
+- **DirectVisualOdometry.py**: Objective of DVO is to find an optimum camera pose which minimizes photometric error between the warped source image and reference image(identity pose 0).
+- **networks.py**: Consist of CNN models for depth estimator and Posenet.
+- **KittiDataset.py**: Read and extract frames and camera parameters for each image in Kitti Dataset. 
+- **CNNLearner.py**: To implement Pose predict CNN using DVO.
+- **FinetuneLearner.py**: Hybrid method that uses pretrained Pose CNN with DDVO for training.
+
+## Pre-requisites
 - Python 3.6
 - PyTorch 1.0
 - Cuda 10.0
