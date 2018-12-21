@@ -1,4 +1,4 @@
-# LDMVDM
+# Learning Depth Module using DDVO
 
 Implementation of the methods in "[Learning Depth from Monocular Videos using Direct Methods](http://openaccess.thecvf.com/content_cvpr_2018/papers/Wang_Learning_Depth_From_CVPR_2018_paper.pdf)".
 
@@ -7,7 +7,7 @@ In the recent years, depth prediction from the monocular video using unsupervise
 
 ## Source Files
 - **ImgPyramid.py**: To compute larger motions in DVO we form pyramid of images through downsampling.
-- **Matinverse.py**: Compute inverse depth maps and camera poses as supervision to learn the depth estimator.
+- **MatInverse.py**: Compute inverse depth maps and camera poses as supervision to learn the depth estimator.
 - **DirectVisualOdometry.py**: Objective of DVO is to find an optimum camera pose which minimizes photometric error between the warped source image and reference image(identity pose 0).
 - **networks.py**: Consist of CNN models for depth estimator and Posenet.
 - **KittiDataset.py**: Read and extract frames and camera parameters for each image in Kitti Dataset. 
@@ -16,7 +16,7 @@ In the recent years, depth prediction from the monocular video using unsupervise
 
 ## Pre-requisites
 - Python 3.6
-- PyTorch 1.0
+- PyTorch 1.0.0
 - Cuda 10.0
 - Ubuntu 16.04
 
@@ -32,7 +32,7 @@ python data/prepare_train_data.py --dataset_dir="path to raw kitti dataset" --da
 ```
 ### Training with different pose prediction modules
 1. #### train from scratch with PoseNet
-PoseNet is a pose predicting CNN which is the basic method for the estimating a depth predicting CNN from monocular video.
+PoseNet is a pose predicting CNN which is the basic method for estimating a depth predicting CNN from monocular video.
 ```
 bash run_train_posenet.sh
 ```
@@ -48,10 +48,13 @@ see [run_train_finetune.sh](https://github.com/abhinav91jain/LDMVDM/blob/master/
 ## Testing
 - To test yourself:
 ```
-CUDA_VISIBLE_DEVICES=0 nice -10 python src/testKITTI.py --dataset_root $DATAROOT --ckpt_file $CKPT --output_path $OUTPUT --test_file_list test_files_eigen.txt
+CUDA_VISIBLE_DEVICES=0 nice -10 python src/testKITTI.py --dataset_root "Path to Kitti dataset" --ckpt_file "Path to checkpoint file" --output_path "Path to output file" --test_file_list test_files_eigen.txt
 ```
 
 ## Results
+| Abs Rel | Sq Rel | RMSE  | RMSE(log) | d1_all | Acc.1 | Acc.2 | Acc.3 |
+|---------|--------|-------|-----------|--------|-------|-------|-------|
+| 0.4503  | 5.0245 |12.6287| 0.5968    | 0.0000 |0.2985 | 0.5495| 0.7573| 
 
 ## Acknowledgement
 
